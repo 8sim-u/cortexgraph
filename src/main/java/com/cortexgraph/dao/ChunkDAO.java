@@ -30,12 +30,13 @@ public class ChunkDAO {
      * Saves a single TextChunk and returns the auto-generated ID.
      */
     public int save(TextChunk chunk) throws VaultException {
-        String sql = "INSERT INTO chunks (document_id, chunk_index, content) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO chunks (document_id, chunk_index, content, page_number) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection(dbUrl);
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, chunk.getDocumentId());
             stmt.setInt(2, chunk.getChunkIndex());
             stmt.setString(3, chunk.getContent());
+            stmt.setInt(4, chunk.getPageNumber());
             stmt.executeUpdate();
 
             try (ResultSet keys = stmt.getGeneratedKeys()) {
@@ -58,7 +59,7 @@ public class ChunkDAO {
             return;
         }
 
-        String sql = "INSERT INTO chunks (document_id, chunk_index, content) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO chunks (document_id, chunk_index, content, page_number) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection(dbUrl)) {
             try {
                 conn.setAutoCommit(false);
@@ -67,6 +68,7 @@ public class ChunkDAO {
                         stmt.setInt(1, chunk.getDocumentId());
                         stmt.setInt(2, chunk.getChunkIndex());
                         stmt.setString(3, chunk.getContent());
+                        stmt.setInt(4, chunk.getPageNumber());
                         stmt.addBatch();
                     }
                     stmt.executeBatch();
@@ -89,7 +91,7 @@ public class ChunkDAO {
      * Retrieves all text chunks belonging to a document, ordered by chunk index.
      */
     public List<TextChunk> findByDocumentId(int documentId) throws VaultException {
-        String sql = "SELECT id, document_id, chunk_index, content FROM chunks WHERE document_id = ? ORDER BY chunk_index ASC";
+        String sql = "SELECT id, document_id, chunk_index, content, page_number FROM chunks WHERE document_id = ? ORDER BY chunk_index ASC";
         List<TextChunk> list = new ArrayList<>();
         try (Connection conn = DatabaseManager.getConnection(dbUrl);
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -100,7 +102,8 @@ public class ChunkDAO {
                             rs.getInt("id"),
                             rs.getInt("document_id"),
                             rs.getInt("chunk_index"),
-                            rs.getString("content")
+                            rs.getString("content"),
+                            rs.getInt("page_number")
                     ));
                 }
                 return list;

@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 public class DocumentIngestor implements AutoCloseable {
 
     private final ExecutorService executor;
+    private final boolean ownsExecutor;
     private final TextChunker chunker;
     private final TextDocumentParser textParser;
     private final PdfDocumentParser pdfParser;
@@ -35,17 +36,23 @@ public class DocumentIngestor implements AutoCloseable {
      * Creates an ingestor with a specified thread pool size.
      */
     public DocumentIngestor(int threadPoolSize) {
-        this(Executors.newFixedThreadPool(threadPoolSize), new TextChunker());
+        this(Executors.newFixedThreadPool(threadPoolSize), new TextChunker(), true);
     }
 
     /**
      * Full constructor allowing custom ExecutorService and TextChunker.
+     * Note: Does not shut down externally supplied executors on close().
      */
     public DocumentIngestor(ExecutorService executor, TextChunker chunker) {
+        this(executor, chunker, false);
+    }
+
+    private DocumentIngestor(ExecutorService executor, TextChunker chunker, boolean ownsExecutor) {
         this.executor = executor;
         this.chunker = chunker != null ? chunker : new TextChunker();
         this.textParser = new TextDocumentParser();
         this.pdfParser = new PdfDocumentParser();
+        this.ownsExecutor = ownsExecutor;
     }
 
     /**
@@ -85,6 +92,7 @@ public class DocumentIngestor implements AutoCloseable {
 
     /**
      * Asynchronously parses and chunks a document input stream on the thread pool.
+     * Callers must ensure the stream remains open until the returned future completes.
      */
     public CompletableFuture<List<TextChunk>> ingestAsync(int documentId, InputStream inputStream, String filename) {
         return CompletableFuture.supplyAsync(() -> {
@@ -102,14 +110,19 @@ public class DocumentIngestor implements AutoCloseable {
      * Initiates an orderly shutdown of the thread pool.
      */
     public void shutdown() {
-        executor.shutdown();
+        if (ownsExecutor) {
+            executor.shutdown();
+        }
     }
 
     /**
      * Attempts to stop all actively executing tasks immediately.
      */
     public List<Runnable> shutdownNow() {
-        return executor.shutdownNow();
+        if (ownsExecutor) {
+            return executor.shutdownNow();
+        }
+        return List.of();
     }
 
     /**
@@ -128,6 +141,9 @@ public class DocumentIngestor implements AutoCloseable {
 
     @Override
     public void close() {
+        if (!ownsExecutor) {
+            return;
+        }
         shutdown();
         try {
             if (!awaitTermination(2, TimeUnit.SECONDS)) {

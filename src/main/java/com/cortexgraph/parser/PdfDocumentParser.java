@@ -9,7 +9,6 @@ import org.apache.pdfbox.text.PDFTextStripper;
 
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -25,10 +24,14 @@ public class PdfDocumentParser implements DocumentParser {
         if (file == null || !file.exists() || !file.isFile()) {
             throw new DocumentParseException("File does not exist or is not a regular file: " + (file != null ? file.getPath() : "null"));
         }
-        try (InputStream fis = new BufferedInputStream(new FileInputStream(file))) {
-            return parse(fis, file.getName());
+        if (file.length() == 0) {
+            throw new DocumentParseException("PDF file is empty (0 bytes): " + file.getName());
+        }
+
+        try (PDDocument document = Loader.loadPDF(file)) {
+            return extractDocumentPages(document, file.getName());
         } catch (IOException e) {
-            throw new DocumentParseException("Failed to read PDF file: " + file.getPath(), e);
+            throw new DocumentParseException("Failed to parse PDF file: " + file.getPath(), e);
         }
     }
 
@@ -45,37 +48,41 @@ public class PdfDocumentParser implements DocumentParser {
         try {
             byte[] pdfBytes = bis.readAllBytes();
             if (pdfBytes.length == 0) {
-                throw new DocumentParseException("PDF file is empty (0 bytes): " + filename);
+                throw new DocumentParseException("PDF stream is empty (0 bytes): " + filename);
             }
 
             try (PDDocument document = Loader.loadPDF(pdfBytes)) {
-                int totalPages = document.getNumberOfPages();
-                if (totalPages == 0) {
-                    throw new DocumentParseException("PDF document contains 0 pages: " + filename);
-                }
-
-                PDFTextStripper stripper = new PDFTextStripper();
-                List<ParsedPage> pages = new ArrayList<>();
-                boolean hasAnyText = false;
-
-                for (int pageNum = 1; pageNum <= totalPages; pageNum++) {
-                    stripper.setStartPage(pageNum);
-                    stripper.setEndPage(pageNum);
-                    String pageText = stripper.getText(document).trim();
-                    if (!pageText.isEmpty()) {
-                        hasAnyText = true;
-                    }
-                    pages.add(new ParsedPage(pageNum, pageText));
-                }
-
-                if (!hasAnyText) {
-                    throw new DocumentParseException("PDF document contains no readable text: " + filename);
-                }
-
-                return new ParsedDocument(filename, pages);
+                return extractDocumentPages(document, filename);
             }
         } catch (IOException e) {
-            throw new DocumentParseException("Failed to parse PDF document: " + filename, e);
+            throw new DocumentParseException("Failed to parse PDF stream: " + filename, e);
         }
+    }
+
+    private ParsedDocument extractDocumentPages(PDDocument document, String filename) throws DocumentParseException, IOException {
+        int totalPages = document.getNumberOfPages();
+        if (totalPages == 0) {
+            throw new DocumentParseException("PDF document contains 0 pages: " + filename);
+        }
+
+        PDFTextStripper stripper = new PDFTextStripper();
+        List<ParsedPage> pages = new ArrayList<>();
+        boolean hasAnyText = false;
+
+        for (int pageNum = 1; pageNum <= totalPages; pageNum++) {
+            stripper.setStartPage(pageNum);
+            stripper.setEndPage(pageNum);
+            String pageText = stripper.getText(document).trim();
+            if (!pageText.isEmpty()) {
+                hasAnyText = true;
+            }
+            pages.add(new ParsedPage(pageNum, pageText));
+        }
+
+        if (!hasAnyText) {
+            throw new DocumentParseException("PDF document contains no readable text: " + filename);
+        }
+
+        return new ParsedDocument(filename, pages);
     }
 }

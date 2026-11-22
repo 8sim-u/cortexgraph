@@ -13,7 +13,7 @@ public class ParsedDocument {
 
     public ParsedDocument(String filename, List<ParsedPage> pages) {
         this.filename = filename != null ? filename : "";
-        this.pages = pages != null ? Collections.unmodifiableList(pages) : Collections.emptyList();
+        this.pages = pages != null ? List.copyOf(pages) : List.of();
     }
 
     public String getFilename() {

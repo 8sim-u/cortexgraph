@@ -76,6 +76,7 @@ public class DatabaseManager {
                 document_id INTEGER NOT NULL,
                 chunk_index INTEGER NOT NULL,
                 content TEXT NOT NULL,
+                page_number INTEGER DEFAULT 1,
                 FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
             );
             """;

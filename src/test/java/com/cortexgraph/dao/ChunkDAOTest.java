@@ -47,13 +47,14 @@ public class ChunkDAOTest {
 
     @Test
     void testSaveSingleChunk() throws Exception {
-        TextChunk c = new TextChunk(docId, 0, "Single chunk content");
+        TextChunk c = new TextChunk(docId, 0, "Single chunk content", 5);
         int chunkId = chunkDAO.save(c);
         assertTrue(chunkId > 0);
 
         List<TextChunk> chunks = chunkDAO.findByDocumentId(docId);
         assertEquals(1, chunks.size());
         assertEquals(chunkId, chunks.get(0).getId());
+        assertEquals(5, chunks.get(0).getPageNumber());
     }
 
     @Test

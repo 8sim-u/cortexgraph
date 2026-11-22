@@ -72,7 +72,7 @@ public class TextChunker {
                 continue;
             }
 
-            String[] words = content.split("\\s+");
+            String[] words = content.split("\\p{javaWhitespace}+");
             if (words.length == 0 || (words.length == 1 && words[0].isEmpty())) {
                 continue;
             }

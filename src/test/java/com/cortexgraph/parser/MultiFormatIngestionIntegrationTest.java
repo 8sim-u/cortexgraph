@@ -87,12 +87,15 @@ public class MultiFormatIngestionIntegrationTest {
         List<TextChunk> savedPdfChunks = chunkDAO.findByDocumentId(pdfDocId);
         assertEquals(2, savedPdfChunks.size());
         assertEquals(0, savedPdfChunks.get(0).getChunkIndex());
+        assertEquals(1, savedPdfChunks.get(0).getPageNumber());
         assertEquals(1, savedPdfChunks.get(1).getChunkIndex());
+        assertEquals(2, savedPdfChunks.get(1).getPageNumber());
         assertTrue(savedPdfChunks.get(0).getContent().contains("PDF Page 1"));
         assertTrue(savedPdfChunks.get(1).getContent().contains("PDF Page 2"));
 
         List<TextChunk> savedMdChunks = chunkDAO.findByDocumentId(mdDocId);
         assertEquals(1, savedMdChunks.size());
+        assertEquals(1, savedMdChunks.get(0).getPageNumber());
         assertTrue(savedMdChunks.get(0).getContent().contains("Architecture Overview"));
     }
 }
