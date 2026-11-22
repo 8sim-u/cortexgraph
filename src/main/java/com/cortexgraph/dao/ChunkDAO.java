@@ -114,6 +114,21 @@ public class ChunkDAO {
     }
 
     /**
+     * Deletes a chunk by its primary key ID.
+     */
+    public boolean deleteById(int id) throws VaultException {
+        String sql = "DELETE FROM chunks WHERE id = ?";
+        try (Connection conn = DatabaseManager.getConnection(dbUrl);
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, id);
+            int affected = stmt.executeUpdate();
+            return affected > 0;
+        } catch (SQLException e) {
+            throw new VaultException("Error deleting chunk id: " + id, e);
+        }
+    }
+
+    /**
      * Deletes all chunks associated with a document ID.
      */
     public boolean deleteByDocumentId(int documentId) throws VaultException {

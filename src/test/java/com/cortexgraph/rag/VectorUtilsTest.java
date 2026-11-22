@@ -38,6 +38,9 @@ public class VectorUtilsTest {
 
         double[] restored = VectorUtils.fromByteArray(bytes);
         assertArrayEquals(original, restored, 1e-15);
+
+        // Invalid byte array length
+        assertThrows(IllegalArgumentException.class, () -> VectorUtils.fromByteArray(new byte[7]));
     }
 
     @Test

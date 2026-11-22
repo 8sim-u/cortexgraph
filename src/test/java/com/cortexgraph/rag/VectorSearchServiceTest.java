@@ -77,4 +77,13 @@ public class VectorSearchServiceTest {
         TextChunk c1 = new TextChunk(1, 1, 0, "Solo chunk");
         assertTrue(searchService.buildSimilarityEdges(List.of(c1), embeddingService, 0.5).isEmpty());
     }
+
+    @Test
+    void testNoSelfEdgesWhenDuplicateChunkIds() {
+        TextChunk c1 = new TextChunk(1, 1, 0, "Artificial intelligence and deep neural networks");
+        TextChunk c1Dup = new TextChunk(1, 1, 0, "Artificial intelligence and deep neural networks");
+
+        List<GraphEdge> edges = searchService.buildSimilarityEdges(List.of(c1, c1Dup), embeddingService, 0.5);
+        assertTrue(edges.isEmpty(), "Edges between identical chunk IDs must be prevented");
+    }
 }

@@ -80,4 +80,20 @@ public class EmbeddingServiceTest {
         assertEquals(1, freshService.getAllCachedEmbeddings().size());
         assertNotNull(freshService.getCachedEmbedding(String.valueOf(chunkId)));
     }
+
+    @Test
+    void testUnpersistedChunkDoesNotCollide() throws Exception {
+        TextChunk c1 = new TextChunk(1, 0, "Artificial intelligence in medicine");
+        TextChunk c2 = new TextChunk(1, 1, "Culinary recipes for Italian pasta");
+        assertEquals(0, c1.getId());
+        assertEquals(0, c2.getId());
+
+        double[] v1 = embeddingService.embedChunk(c1);
+        double[] v2 = embeddingService.embedChunk(c2);
+
+        assertNotNull(v1);
+        assertNotNull(v2);
+        assertTrue(VectorUtils.cosineSimilarity(v1, v2) < 0.9, "Distinct unpersisted chunks must not collide");
+        assertNull(embeddingService.getCachedEmbedding("0"), "Unpersisted chunks (id=0) must not be cached under key '0'");
+    }
 }

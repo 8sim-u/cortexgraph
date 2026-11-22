@@ -69,6 +69,11 @@ public class EmbeddingDAO {
                     e.addSuppressed(rollbackEx);
                 }
                 throw new VaultException("Failed to batch save embeddings, transaction rolled back", e);
+            } finally {
+                try {
+                    conn.setAutoCommit(true);
+                } catch (SQLException ignored) {
+                }
             }
         } catch (SQLException e) {
             throw new VaultException("Database error during batch embedding insert", e);

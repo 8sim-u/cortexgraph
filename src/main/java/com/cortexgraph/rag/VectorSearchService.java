@@ -68,17 +68,23 @@ public class VectorSearchService {
         List<GraphEdge> edges = new ArrayList<>();
         int n = chunks.size();
 
+        // Pre-fetch embedding vectors to reduce map lookups from O(N^2) to O(N)
+        double[][] vectors = new double[n][];
+        for (int i = 0; i < n; i++) {
+            TextChunk chunk = chunks.get(i);
+            vectors[i] = (chunk != null) ? embeddingService.embedChunk(chunk) : null;
+        }
+
         for (int i = 0; i < n; i++) {
             TextChunk chunkI = chunks.get(i);
-            if (chunkI == null) continue;
-            double[] vecI = embeddingService.embedChunk(chunkI);
+            if (chunkI == null || vectors[i] == null) continue;
 
             for (int j = i + 1; j < n; j++) {
                 TextChunk chunkJ = chunks.get(j);
-                if (chunkJ == null) continue;
-                double[] vecJ = embeddingService.embedChunk(chunkJ);
+                if (chunkJ == null || vectors[j] == null) continue;
+                if (chunkI.getId() == chunkJ.getId()) continue; // Prevent self-edges
 
-                double sim = VectorUtils.cosineSimilarity(vecI, vecJ);
+                double sim = VectorUtils.cosineSimilarity(vectors[i], vectors[j]);
                 if (sim >= threshold) {
                     edges.add(new GraphEdge(chunkI.getId(), chunkJ.getId(), sim));
                 }

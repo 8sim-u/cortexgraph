@@ -35,20 +35,19 @@ public class VectorUtils {
             return 0.0;
         }
 
-        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+        double similarity = dot / (Math.sqrt(normA) * Math.sqrt(normB));
+        return Math.max(-1.0, Math.min(1.0, similarity));
     }
 
     /**
      * Serializes a double array into a byte array using standard IEEE 754 64-bit precision.
      */
     public static byte[] toByteArray(double[] vector) {
-        if (vector == null) {
+        if (vector == null || vector.length == 0) {
             return new byte[0];
         }
         ByteBuffer buffer = ByteBuffer.allocate(vector.length * Double.BYTES);
-        for (double d : vector) {
-            buffer.putDouble(d);
-        }
+        buffer.asDoubleBuffer().put(vector);
         return buffer.array();
     }
 
@@ -58,6 +57,9 @@ public class VectorUtils {
     public static double[] fromByteArray(byte[] bytes) {
         if (bytes == null || bytes.length == 0) {
             return new double[0];
+        }
+        if (bytes.length % Double.BYTES != 0) {
+            throw new IllegalArgumentException("Byte array length " + bytes.length + " is not a multiple of " + Double.BYTES);
         }
         DoubleBuffer doubleBuffer = ByteBuffer.wrap(bytes).asDoubleBuffer();
         double[] vector = new double[doubleBuffer.remaining()];

@@ -61,4 +61,18 @@ public class EmbeddingDAOTest {
         assertTrue(deleted);
         assertTrue(embeddingDAO.findByChunkId(chunkId1).isEmpty());
     }
+
+    @Test
+    void testCascadeDeleteWhenChunkDeleted() throws Exception {
+        double[] vec = {1.1, 2.2, 3.3};
+        embeddingDAO.save(chunkId1, vec);
+        assertTrue(embeddingDAO.findByChunkId(chunkId1).isPresent());
+
+        // Delete parent chunk directly via ChunkDAO
+        boolean chunkDeleted = chunkDAO.deleteById(chunkId1);
+        assertTrue(chunkDeleted);
+
+        // Verify embedding was cascade deleted by SQLite
+        assertTrue(embeddingDAO.findByChunkId(chunkId1).isEmpty(), "Embedding must be cascade deleted when chunk is deleted");
+    }
 }

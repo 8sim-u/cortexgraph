@@ -44,10 +44,10 @@ public class EmbeddingService {
             throw new IllegalArgumentException("Text cannot be null");
         }
         Response<List<Embedding>> response = embeddingModel.embedAll(List.of(TextSegment.from(text)));
-        List<Embedding> embeddings = response.content();
-        if (embeddings == null || embeddings.isEmpty()) {
+        if (response == null || response.content() == null || response.content().isEmpty()) {
             throw new IllegalStateException("Embedding model produced empty response");
         }
+        List<Embedding> embeddings = response.content();
 
         float[] floatVec = embeddings.get(0).vector();
         double[] doubleVec = new double[floatVec.length];
@@ -59,20 +59,17 @@ public class EmbeddingService {
 
     /**
      * Embeds a text chunk and caches the vector using chunk ID as the key.
+     * Unpersisted chunks (id <= 0) are computed without ID cache collision.
+     * Atomic computeIfAbsent prevents redundant embedding calculations under concurrency.
      */
     public double[] embedChunk(TextChunk chunk) {
         if (chunk == null) {
             throw new IllegalArgumentException("Chunk cannot be null");
         }
-        String key = String.valueOf(chunk.getId());
-        double[] cached = cache.get(key);
-        if (cached != null) {
-            return cached;
+        if (chunk.getId() <= 0) {
+            return embedText(chunk.getContent());
         }
-
-        double[] vector = embedText(chunk.getContent());
-        cache.put(key, vector);
-        return vector;
+        return cache.computeIfAbsent(String.valueOf(chunk.getId()), k -> embedText(chunk.getContent()));
     }
 
     /**
@@ -122,7 +119,9 @@ public class EmbeddingService {
         for (Map.Entry<String, double[]> entry : cache.entrySet()) {
             try {
                 int chunkId = Integer.parseInt(entry.getKey());
-                toSave.put(chunkId, entry.getValue());
+                if (chunkId > 0) {
+                    toSave.put(chunkId, entry.getValue());
+                }
             } catch (NumberFormatException ignored) {
                 // Skip non-integer keys (e.g., query strings or custom identifiers)
             }
