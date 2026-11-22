@@ -90,6 +90,14 @@ public class DatabaseManager {
             );
             """;
 
+        String createEmbeddingsTable = """
+            CREATE TABLE IF NOT EXISTS embeddings (
+                chunk_id INTEGER PRIMARY KEY,
+                vector BLOB NOT NULL,
+                FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
+            );
+            """;
+
         String createChunksIndex = """
             CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);
             """;
@@ -99,6 +107,7 @@ public class DatabaseManager {
             stmt.execute(createDocumentsTable);
             stmt.execute(createChunksTable);
             stmt.execute(createChatHistoryTable);
+            stmt.execute(createEmbeddingsTable);
             stmt.execute(createChunksIndex);
         } catch (SQLException e) {
             throw new VaultException("Failed to initialize database tables at: " + dbUrl, e);
