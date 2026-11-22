@@ -25,6 +25,8 @@ import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -35,6 +37,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Main JavaFX Application for CortexGraph.
@@ -52,6 +56,16 @@ public class CortexGraphApp extends Application {
     private EmbeddingService embeddingService;
     private VectorSearchService searchService;
     private RagChatService chatService;
+
+    // Managed background executor with daemon worker threads
+    private final ExecutorService backgroundExecutor = Executors.newFixedThreadPool(
+            Math.max(2, Runtime.getRuntime().availableProcessors()),
+            r -> {
+                Thread t = new Thread(r, "CortexGraph-Worker");
+                t.setDaemon(true);
+                return t;
+            }
+    );
 
     // UI Components
     private GraphCanvas graphCanvas;
@@ -129,6 +143,26 @@ public class CortexGraphApp extends Application {
         // Start Physics and Animation Loop
         graphCanvas.start();
 
+        // Setup Drag-and-Drop file ingestion
+        root.setOnDragOver(event -> {
+            if (event.getDragboard().hasFiles()) {
+                event.acceptTransferModes(TransferMode.COPY);
+            }
+            event.consume();
+        });
+        root.setOnDragDropped(event -> {
+            Dragboard db = event.getDragboard();
+            boolean success = false;
+            if (db.hasFiles()) {
+                for (File file : db.getFiles()) {
+                    ingestFile(file);
+                }
+                success = true;
+            }
+            event.setDropCompleted(success);
+            event.consume();
+        });
+
         // Load initial data from database
         loadGraphFromDatabase();
 
@@ -146,6 +180,9 @@ public class CortexGraphApp extends Application {
         }
         if (ingestor != null) {
             ingestor.close();
+        }
+        if (backgroundExecutor != null) {
+            backgroundExecutor.shutdownNow();
         }
         super.stop();
     }
@@ -269,12 +306,26 @@ public class CortexGraphApp extends Application {
         );
 
         File file = fileChooser.showOpenDialog(stage);
-        if (file == null) return;
+        if (file != null) {
+            ingestFile(file);
+        }
+    }
 
-        ingestButton.setDisable(true);
+    /**
+     * Ingests a document asynchronously, persists chunks/embeddings to SQLite, and updates UI.
+     * Accessible to both FileChooser and Drag-and-Drop handlers.
+     */
+    public CompletableFuture<Void> ingestFile(File file) {
+        if (file == null || !file.exists()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        if (ingestButton != null) {
+            ingestButton.setDisable(true);
+        }
         statusLabel.setText("Ingesting: " + file.getName() + "...");
 
-        CompletableFuture.supplyAsync(() -> {
+        return CompletableFuture.supplyAsync(() -> {
             try {
                 DocumentRecord doc = new DocumentRecord(file.getName(), file.getAbsolutePath(), file.length());
                 int docId = documentDAO.save(doc);
@@ -293,13 +344,17 @@ public class CortexGraphApp extends Application {
             } catch (Exception ex) {
                 throw new RuntimeException("Ingestion error: " + ex.getMessage(), ex);
             }
-        }).thenAccept(savedChunks -> Platform.runLater(() -> {
-            ingestButton.setDisable(false);
+        }, backgroundExecutor).thenAccept(savedChunks -> Platform.runLater(() -> {
+            if (ingestButton != null) {
+                ingestButton.setDisable(false);
+            }
             statusLabel.setText("Ingested: " + file.getName());
             loadGraphFromDatabase();
         })).exceptionally(ex -> {
             Platform.runLater(() -> {
-                ingestButton.setDisable(false);
+                if (ingestButton != null) {
+                    ingestButton.setDisable(false);
+                }
                 statusLabel.setText("Error ingesting file");
                 Alert alert = new Alert(Alert.AlertType.ERROR, ex.getMessage(), ButtonType.OK);
                 alert.showAndWait();
@@ -325,7 +380,7 @@ public class CortexGraphApp extends Application {
             } catch (Exception ex) {
                 throw new RuntimeException("Chat error: " + ex.getMessage(), ex);
             }
-        }).thenAccept(response -> Platform.runLater(() -> {
+        }, backgroundExecutor).thenAccept(response -> Platform.runLater(() -> {
             chatObservable.add("🤖 Assistant:\n" + response.getContent());
             chatListView.scrollTo(chatObservable.size() - 1);
             sendButton.setDisable(false);
@@ -424,7 +479,7 @@ public class CortexGraphApp extends Application {
             } catch (Exception ex) {
                 throw new RuntimeException("Error computing edges: " + ex.getMessage(), ex);
             }
-        }).thenAccept(entry -> Platform.runLater(() -> {
+        }, backgroundExecutor).thenAccept(entry -> Platform.runLater(() -> {
             graphCanvas.getPhysicsEngine().clearEdges();
             for (GraphEdge edge : entry.getValue()) {
                 graphCanvas.getPhysicsEngine().addEdge(edge);
