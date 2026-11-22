@@ -84,4 +84,8 @@ public class ChatDAO {
             throw new VaultException("Error clearing chat history", e);
         }
     }
+
+    public void clear() throws VaultException {
+        clearHistory();
+    }
 }

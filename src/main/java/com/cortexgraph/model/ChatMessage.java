@@ -36,6 +36,10 @@ public class ChatMessage {
         return sender;
     }
 
+    public String getRole() {
+        return sender;
+    }
+
     public String getContent() {
         return content;
     }
