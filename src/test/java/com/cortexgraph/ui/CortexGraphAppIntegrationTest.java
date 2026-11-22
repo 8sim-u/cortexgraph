@@ -126,4 +126,28 @@ public class CortexGraphAppIntegrationTest {
             assertEquals("assistant", history.get(1).getRole());
         }
     }
+
+    @Test
+    void testPopulateDocumentsListFromDatabaseOnStartup(@TempDir Path tempDir) throws Exception {
+        String dbUrl = "jdbc:sqlite:" + tempDir.resolve("startup_docs.db");
+        DatabaseManager.initializeDatabase(dbUrl);
+
+        DocumentDAO docDAO = new DocumentDAO(dbUrl);
+        docDAO.save(new DocumentRecord("lecture1.pdf", "/docs/lecture1.pdf", 1024L));
+        docDAO.save(new DocumentRecord("lecture2.txt", "/docs/lecture2.txt", 2048L));
+
+        CortexGraphApp app = new CortexGraphApp();
+        app.setDbUrl(dbUrl);
+        app.init();
+
+        try {
+            // Initially documentsObservable is populated via populateDocumentsList()
+            app.populateDocumentsList();
+            assertEquals(2, app.getDocumentsObservable().size());
+            assertTrue(app.getDocumentsObservable().stream().anyMatch(s -> s.contains("lecture1.pdf")));
+            assertTrue(app.getDocumentsObservable().stream().anyMatch(s -> s.contains("lecture2.txt")));
+        } finally {
+            app.stop();
+        }
+    }
 }

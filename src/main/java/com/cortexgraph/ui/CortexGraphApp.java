@@ -69,9 +69,8 @@ public class CortexGraphApp extends Application {
 
     // UI Components
     private GraphCanvas graphCanvas;
-    private ObservableList<String> documentsObservable;
-    private ObservableList<String> chatObservable;
-    private ListView<String> chatListView;
+    private final ObservableList<String> documentsObservable = FXCollections.observableArrayList();
+    private TextArea chatDisplayArea;
 
     private Label inspectorDocLabel;
     private Label inspectorPageLabel;
@@ -164,6 +163,7 @@ public class CortexGraphApp extends Application {
         });
 
         // Load initial data from database
+        populateDocumentsList();
         loadGraphFromDatabase();
 
         Scene scene = new Scene(root, 1280, 800);
@@ -240,7 +240,6 @@ public class CortexGraphApp extends Application {
         Label docsHeader = new Label("📚 Ingested Documents");
         docsHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #89B4FA;");
 
-        documentsObservable = FXCollections.observableArrayList();
         ListView<String> docsListView = new ListView<>(documentsObservable);
         docsListView.setPrefHeight(90);
         docsListView.setStyle("-fx-background-color: #1E1E2E; -fx-control-inner-background: #1E1E2E; -fx-text-fill: #CDD6F4;");
@@ -273,10 +272,12 @@ public class CortexGraphApp extends Application {
         Label chatHeader = new Label("💬 Grounded RAG Assistant");
         chatHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #A6E3A1;");
 
-        chatObservable = FXCollections.observableArrayList();
-        chatListView = new ListView<>(chatObservable);
-        chatListView.setStyle("-fx-background-color: #1E1E2E; -fx-control-inner-background: #1E1E2E; -fx-text-fill: #CDD6F4;");
-        VBox.setVgrow(chatListView, Priority.ALWAYS);
+        chatDisplayArea = new TextArea();
+        chatDisplayArea.setWrapText(true);
+        chatDisplayArea.setEditable(false);
+        chatDisplayArea.setPromptText("Grounded responses and citations will appear here...");
+        chatDisplayArea.setStyle("-fx-control-inner-background: #1E1E2E; -fx-text-fill: #CDD6F4; -fx-font-family: sans-serif; -fx-font-size: 13px;");
+        VBox.setVgrow(chatDisplayArea, Priority.ALWAYS);
 
         HBox inputRow = new HBox(8);
         chatInputField = new TextField();
@@ -290,7 +291,7 @@ public class CortexGraphApp extends Application {
         sendButton.setOnAction(e -> handleSendMessage());
 
         inputRow.getChildren().addAll(chatInputField, sendButton);
-        bottomPane.getChildren().addAll(chatHeader, chatListView, inputRow);
+        bottomPane.getChildren().addAll(chatHeader, chatDisplayArea, inputRow);
 
         sidebar.getItems().addAll(topPane, bottomPane);
         return sidebar;
@@ -374,13 +375,23 @@ public class CortexGraphApp extends Application {
         });
     }
 
+    private void appendChatMessage(String message) {
+        if (chatDisplayArea == null) return;
+        if (chatDisplayArea.getText() == null || chatDisplayArea.getText().isEmpty()) {
+            chatDisplayArea.setText(message);
+        } else {
+            chatDisplayArea.appendText("\n\n" + message);
+        }
+        chatDisplayArea.positionCaret(chatDisplayArea.getText().length());
+        chatDisplayArea.setScrollTop(Double.MAX_VALUE);
+    }
+
     private void handleSendMessage() {
         String query = chatInputField.getText();
         if (query == null || query.isBlank()) return;
 
         chatInputField.clear();
-        chatObservable.add("👤 You: " + query.trim());
-        chatListView.scrollTo(chatObservable.size() - 1);
+        appendChatMessage("👤 You: " + query.trim());
 
         sendButton.setDisable(true);
         statusLabel.setText("Thinking...");
@@ -392,13 +403,12 @@ public class CortexGraphApp extends Application {
                 throw new RuntimeException("Chat error: " + ex.getMessage(), ex);
             }
         }, backgroundExecutor).thenAccept(response -> Platform.runLater(() -> {
-            chatObservable.add("🤖 Assistant:\n" + response.getContent());
-            chatListView.scrollTo(chatObservable.size() - 1);
+            appendChatMessage("🤖 Assistant:\n" + response.getContent());
             sendButton.setDisable(false);
             statusLabel.setText("Ready");
         })).exceptionally(ex -> {
             Platform.runLater(() -> {
-                chatObservable.add("⚠️ Error: " + ex.getMessage());
+                appendChatMessage("⚠️ Error: " + ex.getMessage());
                 sendButton.setDisable(false);
                 statusLabel.setText("Ready");
             });
@@ -406,13 +416,30 @@ public class CortexGraphApp extends Application {
         });
     }
 
-    private void loadGraphFromDatabase() {
+    /**
+     * Always populates documentsObservable directly from documentDAO.findAll().
+     */
+    public void populateDocumentsList() {
+        if (documentsObservable == null || documentDAO == null) {
+            return;
+        }
         try {
             List<DocumentRecord> docs = documentDAO.findAll();
             documentsObservable.clear();
             for (DocumentRecord doc : docs) {
                 documentsObservable.add("• " + doc.getFilename() + " (" + doc.getFileSize() + " bytes)");
             }
+        } catch (Exception ex) {
+            if (statusLabel != null) {
+                statusLabel.setText("Error loading documents: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void loadGraphFromDatabase() {
+        populateDocumentsList();
+        try {
+            List<DocumentRecord> docs = documentDAO.findAll();
 
             graphCanvas.getPhysicsEngine().clear();
             Map<Integer, DocumentRecord> docMap = new HashMap<>();
@@ -459,18 +486,28 @@ public class CortexGraphApp extends Application {
             }
 
             // Load chat history
-            List<ChatMessage> history = chatDAO.findAll();
-            chatObservable.clear();
-            for (ChatMessage msg : history) {
-                if ("user".equalsIgnoreCase(msg.getSender())) {
-                    chatObservable.add("👤 You: " + msg.getContent());
-                } else {
-                    chatObservable.add("🤖 Assistant:\n" + msg.getContent());
+            if (chatDisplayArea != null) {
+                chatDisplayArea.clear();
+                List<ChatMessage> history = chatDAO.findAll();
+                for (ChatMessage msg : history) {
+                    if ("user".equalsIgnoreCase(msg.getSender())) {
+                        appendChatMessage("👤 You: " + msg.getContent());
+                    } else {
+                        appendChatMessage("🤖 Assistant:\n" + msg.getContent());
+                    }
                 }
             }
         } catch (Exception ex) {
             statusLabel.setText("Database sync error: " + ex.getMessage());
         }
+    }
+
+    public TextArea getChatDisplayArea() {
+        return chatDisplayArea;
+    }
+
+    public ObservableList<String> getDocumentsObservable() {
+        return documentsObservable;
     }
 
     private void rebuildGraphEdges() {

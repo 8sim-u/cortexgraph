@@ -7,12 +7,26 @@ import dev.langchain4j.model.output.Response;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Deterministic local fallback embedding model.
- * Generates an L2-normalized vector using token hashing without remote network or Ollama calls.
+ * Generates an L2-normalized vector using token hashing with stopword filtering
+ * without remote network or Ollama calls.
  */
 public class DeterministicEmbeddingModel implements EmbeddingModel {
+
+    public static final Set<String> STOPWORDS = Set.of(
+            "a", "an", "the",
+            "in", "on", "at", "to", "for", "of", "with", "by", "from",
+            "is", "are", "was", "were", "be", "been", "being",
+            "what", "when", "where", "which", "who", "whom", "whose", "why", "how",
+            "and", "or", "but", "not", "so",
+            "this", "that", "these", "those",
+            "it", "its", "as", "do", "does", "did", "can", "could", "would", "should",
+            "tell", "me", "about", "explain"
+    );
+
     private final int dimension;
 
     public DeterministicEmbeddingModel() {
@@ -47,9 +61,26 @@ public class DeterministicEmbeddingModel implements EmbeddingModel {
         float[] vector = new float[dimension];
 
         if (!text.isEmpty()) {
-            String[] tokens = text.toLowerCase().split("\\p{javaWhitespace}+");
-            for (String token : tokens) {
-                if (token.isEmpty()) continue;
+            String[] rawTokens = text.toLowerCase().split("\\p{javaWhitespace}+");
+            List<String> contentTokens = new ArrayList<>();
+            for (String raw : rawTokens) {
+                String token = cleanToken(raw);
+                if (!token.isEmpty() && !STOPWORDS.contains(token)) {
+                    contentTokens.add(token);
+                }
+            }
+
+            // If all tokens were stopwords, fall back to all cleaned tokens
+            if (contentTokens.isEmpty()) {
+                for (String raw : rawTokens) {
+                    String token = cleanToken(raw);
+                    if (!token.isEmpty()) {
+                        contentTokens.add(token);
+                    }
+                }
+            }
+
+            for (String token : contentTokens) {
                 int hash = token.hashCode();
                 int index = Math.floorMod(hash, dimension);
                 vector[index] += (hash >= 0 ? 1.0f : 1.5f);
@@ -75,5 +106,10 @@ public class DeterministicEmbeddingModel implements EmbeddingModel {
         }
 
         return Embedding.from(vector);
+    }
+
+    private String cleanToken(String raw) {
+        if (raw == null) return "";
+        return raw.replaceAll("^[^a-z0-9]+|[^a-z0-9]+$", "");
     }
 }

@@ -96,4 +96,14 @@ public class EmbeddingServiceTest {
         assertTrue(VectorUtils.cosineSimilarity(v1, v2) < 0.9, "Distinct unpersisted chunks must not collide");
         assertNull(embeddingService.getCachedEmbedding("0"), "Unpersisted chunks (id=0) must not be cached under key '0'");
     }
+
+    @Test
+    void testStopwordFilteringProducesIdenticalVectorsForContentWords() {
+        double[] v1 = embeddingService.embedText("degree sum property");
+        double[] v2 = embeddingService.embedText("what is the degree sum property in a and of for");
+
+        // Common stopwords ("what", "is", "the", "in", "a", "and", "of", "for") should be filtered out,
+        // leaving identical content tokens ("degree", "sum", "property")
+        assertArrayEquals(v1, v2, 1e-6, "Embeddings with identical content words and stopwords should match");
+    }
 }
