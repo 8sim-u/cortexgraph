@@ -32,6 +32,8 @@ public class GraphCanvas extends Canvas {
             Color.web("#B4BEFE")  // Lavender
     };
 
+    private static final Font NODE_FONT = Font.font("Menlo", 10);
+
     private final GraphPhysicsEngine physicsEngine;
     private NodeSelectionListener selectionListener;
     private AnimationTimer animationTimer;
@@ -144,9 +146,13 @@ public class GraphCanvas extends Canvas {
             double mouseX = e.getX();
             double mouseY = e.getY();
 
-            panX = mouseX - (mouseX - panX) * factor;
-            panY = mouseY - (mouseY - panY) * factor;
-            zoom = Math.max(0.2, Math.min(4.0, zoom * factor));
+            double oldZoom = zoom;
+            double newZoom = Math.max(0.2, Math.min(4.0, oldZoom * factor));
+            double effectiveFactor = newZoom / oldZoom;
+
+            panX = mouseX - (mouseX - panX) * effectiveFactor;
+            panY = mouseY - (mouseY - panY) * effectiveFactor;
+            zoom = newZoom;
         });
 
         widthProperty().addListener((obs, oldVal, newVal) ->
@@ -207,7 +213,7 @@ public class GraphCanvas extends Canvas {
         // 2. Render nodes
         Collection<GraphNode> nodes = physicsEngine.getNodes();
         gc.setTextAlign(TextAlignment.CENTER);
-        gc.setFont(Font.font("Menlo", 10));
+        gc.setFont(NODE_FONT);
 
         for (GraphNode node : nodes) {
             double r = node.getRadius();

@@ -66,6 +66,7 @@ public class CortexGraphApp extends Application {
 
     private TextField chatInputField;
     private Button sendButton;
+    private Button ingestButton;
     private Slider thresholdSlider;
     private Label statusLabel;
 
@@ -135,17 +136,22 @@ public class CortexGraphApp extends Application {
         applyDarkTheme(scene);
 
         primaryStage.setScene(scene);
-        primaryStage.setOnCloseRequest(e -> {
-            graphCanvas.stop();
-            if (ingestor != null) {
-                ingestor.close();
-            }
-        });
         primaryStage.show();
     }
 
+    @Override
+    public void stop() throws Exception {
+        if (graphCanvas != null) {
+            graphCanvas.stop();
+        }
+        if (ingestor != null) {
+            ingestor.close();
+        }
+        super.stop();
+    }
+
     private ToolBar createTopToolbar(Stage stage) {
-        Button ingestButton = new Button("📂 Ingest Document");
+        ingestButton = new Button("📂 Ingest Document");
         ingestButton.setStyle("-fx-background-color: #89B4FA; -fx-text-fill: #11111B; -fx-font-weight: bold;");
         ingestButton.setOnAction(e -> handleIngestDocument(stage));
 
@@ -265,6 +271,7 @@ public class CortexGraphApp extends Application {
         File file = fileChooser.showOpenDialog(stage);
         if (file == null) return;
 
+        ingestButton.setDisable(true);
         statusLabel.setText("Ingesting: " + file.getName() + "...");
 
         CompletableFuture.supplyAsync(() -> {
@@ -287,10 +294,12 @@ public class CortexGraphApp extends Application {
                 throw new RuntimeException("Ingestion error: " + ex.getMessage(), ex);
             }
         }).thenAccept(savedChunks -> Platform.runLater(() -> {
+            ingestButton.setDisable(false);
             statusLabel.setText("Ingested: " + file.getName());
             loadGraphFromDatabase();
         })).exceptionally(ex -> {
             Platform.runLater(() -> {
+                ingestButton.setDisable(false);
                 statusLabel.setText("Error ingesting file");
                 Alert alert = new Alert(Alert.AlertType.ERROR, ex.getMessage(), ButtonType.OK);
                 alert.showAndWait();
@@ -348,8 +357,10 @@ public class CortexGraphApp extends Application {
                 allChunks.addAll(chunkDAO.findByDocumentId(doc.getId()));
             }
 
-            double centerX = graphCanvas.getWidth() / 2.0;
-            double centerY = graphCanvas.getHeight() / 2.0;
+            double w = graphCanvas.getWidth() > 0 ? graphCanvas.getWidth() : 800.0;
+            double h = graphCanvas.getHeight() > 0 ? graphCanvas.getHeight() : 650.0;
+            double centerX = w / 2.0;
+            double centerY = h / 2.0;
 
             for (int i = 0; i < allChunks.size(); i++) {
                 TextChunk chunk = allChunks.get(i);
@@ -397,26 +408,32 @@ public class CortexGraphApp extends Application {
     }
 
     private void rebuildGraphEdges() {
-        try {
-            double threshold = thresholdSlider.getValue();
-            statusLabel.setText(String.format("Rebuilding edges (threshold: %.2f)...", threshold));
+        double threshold = thresholdSlider.getValue();
+        statusLabel.setText(String.format("Rebuilding edges (threshold: %.2f)...", threshold));
 
-            List<DocumentRecord> docs = documentDAO.findAll();
-            List<TextChunk> allChunks = new ArrayList<>();
-            for (DocumentRecord doc : docs) {
-                allChunks.addAll(chunkDAO.findByDocumentId(doc.getId()));
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                List<DocumentRecord> docs = documentDAO.findAll();
+                List<TextChunk> allChunks = new ArrayList<>();
+                for (DocumentRecord doc : docs) {
+                    allChunks.addAll(chunkDAO.findByDocumentId(doc.getId()));
+                }
+
+                List<GraphEdge> edges = searchService.buildSimilarityEdges(allChunks, embeddingService, threshold);
+                return Map.entry(allChunks.size(), edges);
+            } catch (Exception ex) {
+                throw new RuntimeException("Error computing edges: " + ex.getMessage(), ex);
             }
-
-            graphCanvas.getPhysicsEngine().getEdges().clear();
-            List<GraphEdge> edges = searchService.buildSimilarityEdges(allChunks, embeddingService, threshold);
-            for (GraphEdge edge : edges) {
+        }).thenAccept(entry -> Platform.runLater(() -> {
+            graphCanvas.getPhysicsEngine().clearEdges();
+            for (GraphEdge edge : entry.getValue()) {
                 graphCanvas.getPhysicsEngine().addEdge(edge);
             }
-
-            statusLabel.setText(String.format("Graph rebuilt: %d nodes, %d edges", allChunks.size(), edges.size()));
-        } catch (Exception ex) {
-            statusLabel.setText("Error rebuilding edges: " + ex.getMessage());
-        }
+            statusLabel.setText(String.format("Graph rebuilt: %d nodes, %d edges", entry.getKey(), entry.getValue().size()));
+        })).exceptionally(ex -> {
+            Platform.runLater(() -> statusLabel.setText("Error rebuilding edges: " + ex.getMessage()));
+            return null;
+        });
     }
 
     private void displayChunkInInspector(GraphNode node) {

@@ -5,16 +5,18 @@ import com.cortexgraph.ui.model.GraphNode;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 2D force-directed physics engine simulating spring attraction and Coulomb node repulsion.
  */
 public class GraphPhysicsEngine {
     private final Map<Integer, GraphNode> nodes = new ConcurrentHashMap<>();
-    private final List<GraphEdge> edges = new ArrayList<>();
+    private final List<GraphEdge> edges = new CopyOnWriteArrayList<>();
 
     // Physics parameters
     private double kSpring = 0.05;
@@ -26,13 +28,13 @@ public class GraphPhysicsEngine {
     private double centerX = 400.0;
     private double centerY = 300.0;
 
-    public void addNode(GraphNode node) {
+    public synchronized void addNode(GraphNode node) {
         if (node != null) {
             nodes.put(node.getChunkId(), node);
         }
     }
 
-    public void addEdge(GraphEdge edge) {
+    public synchronized void addEdge(GraphEdge edge) {
         if (edge != null) {
             edges.add(edge);
         }
@@ -47,10 +49,14 @@ public class GraphPhysicsEngine {
     }
 
     public List<GraphEdge> getEdges() {
-        return edges;
+        return Collections.unmodifiableList(edges);
     }
 
-    public void clear() {
+    public synchronized void clearEdges() {
+        edges.clear();
+    }
+
+    public synchronized void clear() {
         nodes.clear();
         edges.clear();
     }
@@ -74,7 +80,7 @@ public class GraphPhysicsEngine {
                 if (dist < 0.01) {
                     dx = (Math.random() - 0.5) * 2.0;
                     dy = (Math.random() - 0.5) * 2.0;
-                    dist = Math.sqrt(dx * dx + dy * dy);
+                    dist = Math.max(0.01, Math.sqrt(dx * dx + dy * dy));
                 }
 
                 // Softened repulsion: F = kRepel / (dist^2 + 100)
