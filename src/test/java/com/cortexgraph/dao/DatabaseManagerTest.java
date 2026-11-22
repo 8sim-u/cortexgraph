@@ -38,6 +38,12 @@ public class DatabaseManagerTest {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1));
             }
+
+            // Check chunks document_id index
+            try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM sqlite_master WHERE type='index' AND name='idx_chunks_document_id'")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1));
+            }
         }
 
         // Verify idempotency

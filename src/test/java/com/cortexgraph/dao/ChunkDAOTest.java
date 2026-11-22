@@ -61,4 +61,16 @@ public class ChunkDAOTest {
         TextChunk orphan = new TextChunk(99999, 0, "Invalid document reference");
         assertThrows(VaultException.class, () -> chunkDAO.save(orphan));
     }
+
+    @Test
+    void testSaveAllRollsBackOnFailure() {
+        TextChunk validChunk = new TextChunk(docId, 0, "Valid chunk");
+        TextChunk invalidChunk = new TextChunk(99999, 1, "Orphan chunk");
+
+        assertThrows(VaultException.class, () -> chunkDAO.saveAll(List.of(validChunk, invalidChunk)));
+
+        // Verify that validChunk was rolled back and not persisted
+        List<TextChunk> chunks = assertDoesNotThrow(() -> chunkDAO.findByDocumentId(docId));
+        assertTrue(chunks.isEmpty(), "Transaction should have rolled back all inserts on failure");
+    }
 }

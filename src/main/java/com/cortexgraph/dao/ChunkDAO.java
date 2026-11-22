@@ -60,7 +60,6 @@ public class ChunkDAO {
 
         String sql = "INSERT INTO chunks (document_id, chunk_index, content) VALUES (?, ?, ?)";
         try (Connection conn = DatabaseManager.getConnection(dbUrl)) {
-            boolean originalAutoCommit = conn.getAutoCommit();
             try {
                 conn.setAutoCommit(false);
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -74,10 +73,12 @@ public class ChunkDAO {
                 }
                 conn.commit();
             } catch (SQLException e) {
-                conn.rollback();
+                try {
+                    conn.rollback();
+                } catch (SQLException rollbackEx) {
+                    e.addSuppressed(rollbackEx);
+                }
                 throw new VaultException("Failed to batch save chunks, transaction rolled back", e);
-            } finally {
-                conn.setAutoCommit(originalAutoCommit);
             }
         } catch (SQLException e) {
             throw new VaultException("Database error during batch chunk insert", e);

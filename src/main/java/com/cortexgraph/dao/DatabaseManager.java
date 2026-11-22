@@ -29,14 +29,22 @@ public class DatabaseManager {
      * Opens a new database connection for the specified database URL.
      */
     public static Connection getConnection(String dbUrl) throws VaultException {
+        Connection connection = null;
         try {
-            Connection connection = DriverManager.getConnection(dbUrl);
+            connection = DriverManager.getConnection(dbUrl);
             // Enable foreign key constraints in SQLite
             try (Statement stmt = connection.createStatement()) {
                 stmt.execute("PRAGMA foreign_keys = ON;");
             }
             return connection;
         } catch (SQLException e) {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException closeEx) {
+                    e.addSuppressed(closeEx);
+                }
+            }
             throw new VaultException("Failed to connect to database at: " + dbUrl, e);
         }
     }
@@ -81,11 +89,16 @@ public class DatabaseManager {
             );
             """;
 
+        String createChunksIndex = """
+            CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);
+            """;
+
         try (Connection conn = getConnection(dbUrl);
              Statement stmt = conn.createStatement()) {
             stmt.execute(createDocumentsTable);
             stmt.execute(createChunksTable);
             stmt.execute(createChatHistoryTable);
+            stmt.execute(createChunksIndex);
         } catch (SQLException e) {
             throw new VaultException("Failed to initialize database tables at: " + dbUrl, e);
         }
