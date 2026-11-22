@@ -10,22 +10,38 @@ public class TextChunk {
     private final int documentId;
     private final int chunkIndex;
     private final String content;
+    private final int pageNumber;
 
     /**
-     * Constructor for creating a new TextChunk before persistence.
+     * Constructor for creating a new TextChunk before persistence, defaulting page to 1.
      */
     public TextChunk(int documentId, int chunkIndex, String content) {
-        this(0, documentId, chunkIndex, content);
+        this(0, documentId, chunkIndex, content, 1);
     }
 
     /**
-     * Full constructor for existing chunks retrieved from the database.
+     * Constructor for creating a new TextChunk with explicit page number before persistence.
+     */
+    public TextChunk(int documentId, int chunkIndex, String content, int pageNumber) {
+        this(0, documentId, chunkIndex, content, pageNumber);
+    }
+
+    /**
+     * Full constructor for existing chunks retrieved from the database, defaulting page to 1.
      */
     public TextChunk(int id, int documentId, int chunkIndex, String content) {
+        this(id, documentId, chunkIndex, content, 1);
+    }
+
+    /**
+     * Full constructor for existing chunks with explicit page number.
+     */
+    public TextChunk(int id, int documentId, int chunkIndex, String content, int pageNumber) {
         this.id = id;
         this.documentId = documentId;
         this.chunkIndex = chunkIndex;
         this.content = content;
+        this.pageNumber = pageNumber;
     }
 
     public int getId() {
@@ -44,6 +60,10 @@ public class TextChunk {
         return content;
     }
 
+    public int getPageNumber() {
+        return pageNumber;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -52,12 +72,13 @@ public class TextChunk {
         return id == textChunk.id &&
                documentId == textChunk.documentId &&
                chunkIndex == textChunk.chunkIndex &&
+               pageNumber == textChunk.pageNumber &&
                Objects.equals(content, textChunk.content);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, documentId, chunkIndex, content);
+        return Objects.hash(id, documentId, chunkIndex, content, pageNumber);
     }
 
     @Override
@@ -66,6 +87,7 @@ public class TextChunk {
                 "id=" + id +
                 ", documentId=" + documentId +
                 ", chunkIndex=" + chunkIndex +
+                ", pageNumber=" + pageNumber +
                 ", content='" + (content != null && content.length() > 30 ? content.substring(0, 30) + "..." : content) + '\'' +
                 '}';
     }
