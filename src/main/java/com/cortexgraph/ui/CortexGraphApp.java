@@ -327,20 +327,31 @@ public class CortexGraphApp extends Application {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
+                // Validate parser exists before touching database
+                ingestor.getParserFor(file.getName());
+
                 DocumentRecord doc = new DocumentRecord(file.getName(), file.getAbsolutePath(), file.length());
                 int docId = documentDAO.save(doc);
 
-                List<TextChunk> chunks = ingestor.ingestAsync(docId, file).get();
-                chunkDAO.saveAll(chunks);
+                try {
+                    List<TextChunk> chunks = ingestor.ingestAsync(docId, file).get();
+                    chunkDAO.saveAll(chunks);
 
-                // Fetch saved chunks with assigned IDs
-                List<TextChunk> savedChunks = chunkDAO.findByDocumentId(docId);
-                for (TextChunk chunk : savedChunks) {
-                    embeddingService.embedChunk(chunk);
+                    // Fetch saved chunks with assigned IDs
+                    List<TextChunk> savedChunks = chunkDAO.findByDocumentId(docId);
+                    for (TextChunk chunk : savedChunks) {
+                        embeddingService.embedChunk(chunk);
+                    }
+                    embeddingService.persistToDatabase(embeddingDAO);
+
+                    return savedChunks;
+                } catch (Exception ex) {
+                    // Rollback document record on parsing/embedding failure to prevent orphan records
+                    try {
+                        documentDAO.deleteById(docId);
+                    } catch (Exception ignored) {}
+                    throw ex;
                 }
-                embeddingService.persistToDatabase(embeddingDAO);
-
-                return savedChunks;
             } catch (Exception ex) {
                 throw new RuntimeException("Ingestion error: " + ex.getMessage(), ex);
             }

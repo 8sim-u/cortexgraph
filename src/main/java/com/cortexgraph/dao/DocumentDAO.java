@@ -103,6 +103,10 @@ public class DocumentDAO {
         }
     }
 
+    public boolean deleteById(int id) throws VaultException {
+        return delete(id);
+    }
+
     private DocumentRecord mapRowToDocument(ResultSet rs) throws SQLException {
         return new DocumentRecord(
                 rs.getInt("id"),
